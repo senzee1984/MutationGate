@@ -3,27 +3,20 @@
 #include <winternl.h>
 #include <stdint.h>
 
-PVOID g_ntDrawTextPtr = nullptr;
-PVOID g_ntDrawTextPtroffset8 = nullptr;
-uint32_t ntqip_ssn = 0x0;
 
-typedef NTSTATUS (NTAPI* fnNtQueryInformationProcess)
-(	//Define custom function prototype for NtQueryInformationProcess
-	HANDLE ProcessHandle,
-	PROCESSINFOCLASS ProcessInformationClass,
-	PVOID ProcessInformation,
-	ULONG ProcessInformationLength,
-	PULONG ReturnLength
-);
+PVOID pNTDT= nullptr;	//Address of NtDrawText
+PVOID pNTDTOffset_8 = nullptr;	//Address of NtDrawText+0x8
+uint32_t ntqip_ssn = 0x0;	//SSN for NtQueryInformationProcess
+
+//Define custom function prototype for NtQueryInformationProcess
+typedef NTSTATUS (NTAPI* fnNtQueryInformationProcess)(HANDLE ProcessHandle,PROCESSINFOCLASS ProcessInformationClass,PVOID ProcessInformation,ULONG ProcessInformationLength,PULONG ReturnLength);
 
 
-uint32_t ROR13(uint32_t functionHash, int bits) 
-{
+uint32_t ROR13(uint32_t functionHash, int bits) {
 	return ((functionHash >> bits) | (functionHash << (32 - bits))) & 0xFFFFFFFF;
 }
 
-uint32_t ROR13Hash(const char* functionName) 
-{
+uint32_t ROR13Hash(const char* functionName) {
 	uint32_t functionHash = 0;
 	for (int i = 0; functionName[i] != '\0'; i++) {
 		uint32_t c = (uint32_t)functionName[i];
@@ -33,7 +26,7 @@ uint32_t ROR13Hash(const char* functionName)
 	return functionHash;
 }
 
-
+//Get module handle for ntdll and kernel32 at the same time
 void GetModule(HMODULE * ntdll, HMODULE * kernel32)
 {
 	PPEB peb = (PPEB)(__readgsqword(0x60));
@@ -46,6 +39,7 @@ void GetModule(HMODULE * ntdll, HMODULE * kernel32)
 	*kernel32 = *(HMODULE*)((PBYTE)kernel32listentry + 0x10);
 }
 
+//Return function's address by function name hash
 PVOID GetFuncByHash(IN HMODULE hModule, uint32_t Hash)
 {
 	PBYTE pBase = (PBYTE)hModule;
@@ -67,13 +61,13 @@ PVOID GetFuncByHash(IN HMODULE hModule, uint32_t Hash)
 		PVOID pFunctionAddress = (PVOID)(pBase + FunctionAddressArray[FunctionOrdinalArray[i]]);
 		if (Hash == ROR13Hash(pFunctionName)) 
 		{
-		//	printf("[ %0.4d ] FOUND API -\t NAME: %s -\t ADDRESS: 0x%p  -\t ORDINAL: %x\n", i, pFunctionName, pFunctionAddress, FunctionOrdinalArray[i]+1);
 			return pFunctionAddress;
 		}
 	}
 	return NULL;
 }
 
+//Convert RVA to File Offset when handling PE file saved in an array
 DWORD RvaToFileOffset(PIMAGE_NT_HEADERS ntHeaders, DWORD rva) {
 	PIMAGE_SECTION_HEADER sectionHeader = IMAGE_FIRST_SECTION(ntHeaders);
 	for (int i = 0; i < ntHeaders->FileHeader.NumberOfSections; i++, sectionHeader++) {
@@ -83,10 +77,11 @@ DWORD RvaToFileOffset(PIMAGE_NT_HEADERS ntHeaders, DWORD rva) {
 			return rva - sectionAddress + sectionHeader->PointerToRawData;
 		}
 	}
-	return 0; // RVA not found in any section
+	return 0; 
 }
 
 
+//Similar to GetFuncByHash, but return the function's SSN. Only support NTAPI
 uint32_t GetSSNByHash(PVOID pe, uint32_t Hash) 
 {
 	PBYTE pBase = (PBYTE)pe;
@@ -117,16 +112,20 @@ uint32_t GetSSNByHash(PVOID pe, uint32_t Hash)
 			return byteAtOffset5;
 		}
 	}
+	return 0x0;
 }
 
 
-unsigned long long setBits(unsigned long long dw, int lowBit, int bits, unsigned long long newValue) {
+//Hardware breakpoint related code is shamelessly copied from https://gist.github.com/CCob/fe3b63d80890fafeca982f76c8a3efdf
+unsigned long long setBits(unsigned long long dw, int lowBit, int bits, unsigned long long newValue) 
+{
 	unsigned long long mask = (1UL << bits) - 1UL;
 	dw = (dw & ~(mask << lowBit)) | (newValue << lowBit);
 	return dw;
 }
 
-void clearBreakpoint(CONTEXT& ctx, int index) {
+void clearBreakpoint(CONTEXT& ctx, int index) 
+{
 	switch (index) {
 	case 0:
 		ctx.Dr0 = 0;
@@ -141,7 +140,6 @@ void clearBreakpoint(CONTEXT& ctx, int index) {
 		ctx.Dr3 = 0;
 		break;
 	}
-
 	ctx.Dr7 = setBits(ctx.Dr7, (index * 2), 1, 0);
 	ctx.Dr6 = 0;
 	ctx.EFlags = 0;
@@ -162,13 +160,14 @@ void enableBreakpoint(CONTEXT& ctx, PVOID address, int index) {
 		ctx.Dr3 = (ULONG_PTR)address;
 		break;
 	}
-
 	ctx.Dr7 = setBits(ctx.Dr7, 16, 16, 0);
 	ctx.Dr7 = setBits(ctx.Dr7, (index * 2), 1, 1);
 	ctx.Dr6 = 0;
 }
 
-void clearHardwareBreakpoint(CONTEXT* ctx, int index) {
+
+void clearHardwareBreakpoint(CONTEXT* ctx, int index) 
+{
 	switch (index) {
 	case 0:
 		ctx->Dr0 = 0;
@@ -189,18 +188,19 @@ void clearHardwareBreakpoint(CONTEXT* ctx, int index) {
 	ctx->EFlags = 0;
 }
 
+//Update the SSN stored in RAX
 void setResult(CONTEXT* ctx, ULONG_PTR result)
 {
-	printf("Before updating RAX: RAX is 0x%x\n", ctx->Rax);
+	printf("Before updating: RAX = 0x%x\n\n", ctx->Rax);
 	ctx->Rax = result;
 	//printf("RAX is updated to 0x18\n");
-	printf("After updating RAX: Now RAX is 0x%x\n", ctx->Rax);
+	printf("After updating: RAX = 0x%x\n\n", ctx->Rax);
 }
 
 LONG WINAPI exceptionHandler(PEXCEPTION_POINTERS exceptions) 
 {
 	if (exceptions->ExceptionRecord->ExceptionCode == EXCEPTION_SINGLE_STEP &&
-		exceptions->ExceptionRecord->ExceptionAddress == g_ntDrawTextPtroffset8) 
+		exceptions->ExceptionRecord->ExceptionAddress == pNTDTOffset_8) 
 	{
 		setResult(exceptions->ContextRecord, ntqip_ssn);	//SSN for NtQueryInformationProcess
 		clearHardwareBreakpoint(exceptions->ContextRecord, 0);
@@ -215,27 +215,18 @@ LONG WINAPI exceptionHandler(PEXCEPTION_POINTERS exceptions)
 
 HANDLE setupHardwareBp(HMODULE module) 
 {
-	if (g_ntDrawTextPtr == nullptr) 
-	{
-		g_ntDrawTextPtr = (PVOID)GetProcAddress(module, "NtDrawText");
-		g_ntDrawTextPtroffset8 = (PVOID)((BYTE*)g_ntDrawTextPtr + 0x8);
-	}
-	if (g_ntDrawTextPtr == nullptr)
-	{
-			return nullptr;
-	}
-
 	HANDLE hExHandler = AddVectoredExceptionHandler(1, exceptionHandler);
-
 	CONTEXT threadCtx;
 	threadCtx.ContextFlags = CONTEXT_ALL;
 	if (GetThreadContext((HANDLE)-2, &threadCtx)) 
 	{
-		enableBreakpoint(threadCtx, g_ntDrawTextPtroffset8, 0);
+		enableBreakpoint(threadCtx, pNTDTOffset_8, 0);	//Set a hardware breakpoint at NtDrawText+0x8
 		SetThreadContext((HANDLE)-2, &threadCtx);
 	}
 	return hExHandler;
 }
+
+
 
 
 int main()
@@ -243,37 +234,38 @@ int main()
 	HMODULE ntdll;
 	HMODULE kernel32;
 	GetModule(&ntdll, &kernel32);
-	printf("ntdll base address: %p\n", ntdll);
-	printf("kernel32 base address: %p\n", kernel32);
-	printf("Address of function is %p\n\n",GetFuncByHash(kernel32, 0xec0e4e8e));	//LoadLibraryA
+	printf("ntdll base address: %p\n\n", ntdll);
+	printf("kernel32 base address: %p\n\n", kernel32);
 
+	pNTDT = GetFuncByHash(ntdll, 0xA1920265);	//NtDrawText hash
+	pNTDTOffset_8 = (PVOID)((BYTE*)pNTDT + 0x8);	//Offset 0x8 from NtDrawText
+
+	//Read ntdll on disk, and save the content in an array
 	HANDLE hFile = CreateFileA("C:\\Windows\\System32\\ntdll.dll", GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
-		printf("[!] CreateFileA Failed With Error : %d \n", GetLastError());
+		printf("[!] CreateFileA Failed With Error : %d \n\n", GetLastError());
 		return -1;
 	}
-
-	// allocating enough memory to read the ntdll.dll file
 	DWORD dwFileLen = GetFileSize(hFile, NULL);
 	DWORD dwNumberOfBytesRead;
 	PVOID pNtdllBuffer = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, dwFileLen);
-
-	// reading the file
 	if (!ReadFile(hFile, pNtdllBuffer, dwFileLen, &dwNumberOfBytesRead, NULL) || dwFileLen != dwNumberOfBytesRead) 
 	{
-		printf("[!] ReadFile Failed With Error : %d \n", GetLastError());
-		printf("[i] Read %d of %d Bytes \n", dwNumberOfBytesRead, dwFileLen);
+		printf("[!] ReadFile Failed With Error : %d \n\n", GetLastError());
+		printf("[i] Read %d of %d Bytes \n\n", dwNumberOfBytesRead, dwFileLen);
 		return -1;
 	}
-
 	if (hFile)
 	{
 		CloseHandle(hFile);
 	}
 	
-	ntqip_ssn = GetSSNByHash(pNtdllBuffer, 0xB10FD839); //NtQueryInformationProcess
-	printf("SSN of NtQueryInformationProcess is 0x%x\n", ntqip_ssn);
 
+	//Get NtQueryInformationProcess function address by ROR13 hash
+	ntqip_ssn = GetSSNByHash(pNtdllBuffer, 0xB10FD839); 
+	printf("SSN of NtQueryInformationProcess is 0x%x\n\n", ntqip_ssn);
+
+	//Create a process to verify if NtQueryInformationProcess works later
 	STARTUPINFOA si;
 	PROCESS_INFORMATION pi;
 	ZeroMemory(&si, sizeof(si));
@@ -284,25 +276,31 @@ int main()
 		printf("CreateProcess failed (%d).\n", GetLastError());
 		return 1;
 	}
-  
 	PROCESS_BASIC_INFORMATION pbi;
+	
+	//Set up hardware breakpoint
 	HANDLE hExHandler = setupHardwareBp(ntdll);
+	
 	if ( hExHandler != nullptr)
 	{
-		printf("Modified rax at NtDrawText+0x8(0x%p)\n",g_ntDrawTextPtroffset8);
-		fnNtQueryInformationProcess pNTQIP = (fnNtQueryInformationProcess)g_ntDrawTextPtr;
-		NTSTATUS status = pNTQIP(pi.hProcess, ProcessBasicInformation, &pbi, sizeof(PROCESS_BASIC_INFORMATION), NULL);	//But prepare arguments for the hooked function
+		printf("Modified rax at NtDrawText+0x8(0x%p)\n\n",pNTDTOffset_8);
+		//Assign the address of NtDrawText to NtQueryInformationProcess function pointer
+		fnNtQueryInformationProcess pNTQIP = (fnNtQueryInformationProcess)pNTDT;
+		//But prepare arguments for the hooked function such as NtQueryInformationProcess
+		NTSTATUS status = pNTQIP(pi.hProcess, ProcessBasicInformation, &pbi, sizeof(PROCESS_BASIC_INFORMATION), NULL);	
 
 		if (status == 0) 
 		{
-			printf("PEB Address:%p\n", pbi.PebBaseAddress);
+			printf("NTAPI NtQueryInformationprocess was called successfully\n\nPEB of inspected process is :%p\n\n", pbi.PebBaseAddress);
 		}
 		else
 		{
-			printf("\nCalled failed\n");
+			printf("Called failed\n\n");
 		}
-		printf("\nThe result of NT function is %d\n", status);
+
+		printf("The result of NTAPI NtQueryInformationProcess is %d\n\n", status);
 	}
+
 	return 0;
 }
 
