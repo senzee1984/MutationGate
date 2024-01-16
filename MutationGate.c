@@ -296,6 +296,7 @@ int main()
 		else
 		{
 			printf("Called failed\n\n");
+			return -1;
 		}
 
 		printf("The result of NTAPI NtQueryInformationProcess is %d\n\n", status);
