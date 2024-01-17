@@ -26,6 +26,11 @@ Assume NTAPI `NtDrawText` is not hooked, while NTAPI `NtQueryInformationProcess`
 
 
 ## Disclaimer
+1. MutationGate is not an extension or variant of various Gate. Because those Gate focus more on retrieving SSN of NTAPI, MutationGate focuses on bypassing the inline hook in NTAPI.
+2. MutationGate is able to bypass inline hook in NTAPI, however, the individual technique does not guarantee to bypass EDR, because EDR has multiple detection dimensions, inline hook is one of them.
+3. The project is a POC, not a complete and comprehensive implementation.
+
+
 
 ## Advantages of MutationGate Approach
 
