@@ -86,7 +86,14 @@ The call is made to NtDrawText's address, but with NtQueryInformationProcess. Si
 
 
 ## Advantages of MutationGate Approach
+So far, some classic and common approaches to bypass EDR's inline hook include but are not limited to the following approaches:
+1. Load the 2nd ntdll module
+2. Copy a fresh ntdll's text section to overwrite hooked ntdll's text section
+3. Overwrite hooked codes(syscall stub) with fresh code
 
+The above techniques involve the modification of loaded ntdll, or loading of the 2nd ntdll. These behaviors could be detected by EDR. 
+
+While MutationGate is not the only approach that untouches loaded ntdll, it does have the advantage of not modifying the loaded ntdll module, which decreases the possibility of getting detected.  
 
 
 ## Detection and Countermeasure of Detection
