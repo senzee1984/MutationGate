@@ -53,7 +53,6 @@ uint32_t GetSSNByHash(PVOID pe, uint32_t Hash)
 		DWORD Function_RVA = FunctionAddressArray[FunctionOrdinalArray[i]];
 		if (Hash == ROR13Hash(pFunctionName))
 		{
-			//printf("[ %x ] FOUND API -\t NAME: %s -\t RVA: 0x%x  -\t ORDINAL: %x\n", i, pFunctionName, Function_RVA, FunctionOrdinalArray[i] + 1);
 			void *ptr = malloc(10);
 			if (ptr == NULL) {
 				perror("malloc failed");
