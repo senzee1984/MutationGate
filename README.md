@@ -94,7 +94,9 @@ So far, some classic and common approaches to bypass EDR's inline hook include b
 
 The above techniques involve the modification of loaded ntdll, or loading of the 2nd ntdll. These behaviors could be detected by EDR. 
 
-While MutationGate is not the only approach that untouches loaded ntdll, it does have the advantage of not modifying the loaded ntdll module, which decreases the possibility of getting detected.  
+While MutationGate is not the only approach that untouches loaded ntdll, it does have the advantage of not modifying the loaded ntdll module, which decreases the possibility of getting detected. 
+
+And, it is very simple, no need to modify other registers, etc.
 
 
 ## Detection
