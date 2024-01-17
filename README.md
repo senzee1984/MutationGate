@@ -75,6 +75,21 @@ uint32_t GetSSNByHash(PVOID pe, uint32_t Hash)
 ```
 
 
+## Update
+
+![example](screenshot/update.jpg)
+
+I provided an updated poc `MutationGate_Update.cpp`. In this POC, I set 2 hbp respectively at `DrawText` and `NtDrawText+0x8`.
+
+When the execution reaches DrawText, update the RIP to `NtDrawText+0`
+
+When the execution reaches NtDrawText+8, update the RAX to NtQueryInformationProcess' SSN.
+
+**Pros: Avoid the direct call to NTAPI**
+
+**Cons: From the perspective of EDR, it is DrawText initiates the syscall, while NTAPI is skipped.**
+
+
 ## Example
 
 ![example](screenshot/poc.png)
