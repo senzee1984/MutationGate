@@ -1,5 +1,7 @@
 # MutationGate
-Use hardware breakpoint to dynamically change SSN in run-time
+MutationGate is a new approach to bypass EDR's inline hooking by utilizing hardware breakpoint to redirect the syscall.
+
+It works by calling an unhooked NTAPI and replacing the unhooked NTAPI's SSN with hooked NTAPI's. In this way, the syscall is redirected to the hooked NTAPI's, and the inline hook can be bypassed without loading the 2nd ntdll module or modifying bytes within loaded ntdll's memory space. 
 
 
 ## Description
@@ -13,6 +15,8 @@ Set a hardware breakpoint at NtDrawText+0x8, when the address is reached, modify
 
 ![example](screenshot/poc.png)
 
+
+## Disclaimer
 
 ## Advantages of MutationGate Approach
 
