@@ -35,31 +35,37 @@ ntdll!NtDrawText:
 4. Retrieve the SSN of `NtQueryInformationProcess`. Inside the exception handler, update RAX with NtQueryInformationProcess' SSN. I.e., the original SSN was replaced.
 ```c
 ...<SNIP>...
-PVOID GetFuncByHash(IN HMODULE hModule, uint32_t Hash)
+uint32_t GetSSNByHash(PVOID pe, uint32_t Hash) 
 {
-	PBYTE pBase = (PBYTE)hModule;
+	PBYTE pBase = (PBYTE)pe;
 	PIMAGE_DOS_HEADER	pImgDosHdr = (PIMAGE_DOS_HEADER)pBase;
-	if (pImgDosHdr->e_magic != IMAGE_DOS_SIGNATURE)
-		return NULL;
 	PIMAGE_NT_HEADERS	pImgNtHdrs = (PIMAGE_NT_HEADERS)(pBase + pImgDosHdr->e_lfanew);
-	if (pImgNtHdrs->Signature != IMAGE_NT_SIGNATURE)
-		return NULL;
-
 	IMAGE_OPTIONAL_HEADER	ImgOptHdr = pImgNtHdrs->OptionalHeader;
-	PIMAGE_EXPORT_DIRECTORY pImgExportDir = (PIMAGE_EXPORT_DIRECTORY)(pBase + ImgOptHdr.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress);
-	PDWORD FunctionNameArray = (PDWORD)(pBase + pImgExportDir->AddressOfNames);
-	PDWORD FunctionAddressArray = (PDWORD)(pBase + pImgExportDir->AddressOfFunctions);
-	PWORD  FunctionOrdinalArray = (PWORD)(pBase + pImgExportDir->AddressOfNameOrdinals);
-	for (DWORD i = 0; i < pImgExportDir->NumberOfFunctions; i++) 
+	DWORD exportdirectory_foa = RvaToFileOffset(pImgNtHdrs, ImgOptHdr.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress);
+	PIMAGE_EXPORT_DIRECTORY pImgExportDir = (PIMAGE_EXPORT_DIRECTORY)(pBase + exportdirectory_foa);	//Calculate corresponding offset
+	PDWORD FunctionNameArray = (PDWORD)(pBase + RvaToFileOffset(pImgNtHdrs, pImgExportDir->AddressOfNames));
+	PDWORD FunctionAddressArray = (PDWORD)(pBase + RvaToFileOffset(pImgNtHdrs, pImgExportDir->AddressOfFunctions));
+	PWORD  FunctionOrdinalArray = (PWORD)(pBase + RvaToFileOffset(pImgNtHdrs, pImgExportDir->AddressOfNameOrdinals));
+
+	for (DWORD i = 0; i < pImgExportDir->NumberOfFunctions; i++)
 	{
-		CHAR* pFunctionName = (CHAR*)(pBase + FunctionNameArray[i]);
-		PVOID pFunctionAddress = (PVOID)(pBase + FunctionAddressArray[FunctionOrdinalArray[i]]);
-		if (Hash == ROR13Hash(pFunctionName)) 
+		CHAR* pFunctionName = (CHAR*)(pBase + RvaToFileOffset(pImgNtHdrs, FunctionNameArray[i]));
+		DWORD Function_RVA = FunctionAddressArray[FunctionOrdinalArray[i]];
+		if (Hash == ROR13Hash(pFunctionName))
 		{
-			return pFunctionAddress;
+			//printf("[ %x ] FOUND API -\t NAME: %s -\t RVA: 0x%x  -\t ORDINAL: %x\n", i, pFunctionName, Function_RVA, FunctionOrdinalArray[i] + 1);
+			void *ptr = malloc(10);
+			if (ptr == NULL) {
+				perror("malloc failed");
+				return -1;
+			}
+			unsigned char byteAtOffset5 = *((unsigned char*)(pBase + RvaToFileOffset(pImgNtHdrs, Function_RVA)) + 4);
+			//printf("Syscall number of function %s is: 0x%x\n", pFunctionName,byteAtOffset5);	//0x18
+			free(ptr);
+			return byteAtOffset5;
 		}
 	}
-	return NULL;
+	return 0x0;
 }
 ...<SNIP>...
 ```
@@ -116,6 +122,8 @@ It is possible to detect MutationGate technique.
 <https://malwaretech.com/2023/12/silly-edr-bypasses-and-where-to-find-them.html>
 
 Maldev Academy
+
+ChatGPT
 
 ## Other Approaches Utilized Hardware Breakpoint
 <https://github.com/Dec0ne/HWSyscalls>
