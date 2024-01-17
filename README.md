@@ -5,7 +5,7 @@ It works by calling an unhooked NTAPI and replacing the unhooked NTAPI's SSN wit
 
 The provided project is only a `POC`, not a comprehensive implementation. For instance, you could use this approach to set hardware breakpoints for a set of functions. 
 
-The function can also be WIN32API. For instance, we can set the 1st hbp at `DrawText+0` to redirect the execution to `NtDrawText+8`, and the 2nd hbp replaces the SSN saved in RAX. In this way, module `kernel32.dll` is not skipped, the call stack looks more legitimate. 
+The function can also be WIN32API. For instance, we can set the 1st hbp at `DrawText` to redirect the execution to `NtDrawText`, and the 2nd hbp replaces the SSN saved in RAX. In this way, module `kernel32.dll` is not skipped, and the call stack looks more legitimate. 
 
 ## Description
 EDR tends to set inline hooks for various NTAPI, especially those are usually leveraged in malware, such as `NtAllocVirtualMemory`, `NtOpenProcess`, etc. While other NTAPI that are not usually leveraged in malware tend not to have inline hook, such as `NtDrawText`. It is very unlikely that an EDR set inline hook for all NTAPI.   
@@ -90,12 +90,18 @@ So far, some classic and common approaches to bypass EDR's inline hook include b
 1. Load the 2nd ntdll module
 2. Copy a fresh ntdll's text section to overwrite hooked ntdll's text section
 3. Overwrite hooked codes(syscall stub) with fresh code
+4. More...
 
 The above techniques involve the modification of loaded ntdll, or loading of the 2nd ntdll. These behaviors could be detected by EDR. 
 
 While MutationGate is not the only approach that untouches loaded ntdll, it does have the advantage of not modifying the loaded ntdll module, which decreases the possibility of getting detected.  
 
 
-## Detection and Countermeasure of Detection
+## Detection
+It is possible to detect MutationGate technique.
+
+1. The `AddVectoredExceptionHandler` call could look suspicious in a normal program.
+2. In the POC, NTAPI is called directly, which could be weird in a normal program. However, it can be resolved by adding 1 more hardware breakpoint at `DrawText`, directing the execution to `NtDrawText` and triggering the 2nd hardware breakpoint that replaces SSN.
+3. Call stack in kernel space could reveal clues.
 
 ## Credits and References
