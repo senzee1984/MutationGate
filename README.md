@@ -74,6 +74,9 @@ PVOID GetFuncByHash(IN HMODULE hModule, uint32_t Hash)
 
 ![example](screenshot/poc.png)
 
+In this example, NtDrawtext's SSN is `0xdd`, `NtQueryInformationProcess`' SSN is `0x19`, the address of NtDrawText is `0x00007FFBAD00EB60`
+
+The call is made to NtDrawText's address, but with NtQueryInformationProcess. Since the SSN is changed from `0xdd` to `0x19`, the syscall is successful.
 
 ## Disclaimer
 1. MutationGate is not an extension or variant of various Gate. Because those Gate focus more on retrieving SSN of NTAPI, MutationGate focuses on bypassing the inline hook in NTAPI.
