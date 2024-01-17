@@ -107,3 +107,15 @@ It is possible to detect MutationGate technique.
 3. Call stack in kernel space could reveal clues.
 
 ## Credits and References
+<https://cyberwarfare.live/bypassing-av-edr-hooks-via-vectored-syscall-poc/>
+
+<https://redops.at/en/blog/syscalls-via-vectored-exception-handling>
+
+<https://gist.github.com/CCob/fe3b63d80890fafeca982f76c8a3efdf>
+
+## Other Approaches Utilized Hardware Breakpoint
+<https://github.com/Dec0ne/HWSyscalls>
+
+<https://github.com/rad9800/TamperingSyscalls>
+
+<https://github.com/RedTeamOperations/VEH-PoC>
