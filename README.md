@@ -13,11 +13,61 @@ EDR tends to set inline hooks for various NTAPI, especially those are usually le
 Assume NTAPI `NtDrawText` is not hooked, while NTAPI `NtQueryInformationProcess` is hooked, the steps are as follows:
 
 1. Get the address of `NtDrawText`. It can be achieved by utilizing `GetModuleHandle` and `GetProcAddress` combination, or a custom implementation of them via PEB walking.
+```c
+  pNTDT = GetFuncByHash(ntdll, 0xA1920265);	//NtDrawText hash
+	pNTDTOffset_8 = (PVOID)((BYTE*)pNTDT + 0x8);	//Offset 0x8 from NtDrawText
+```
 2. Prepare arguments for `NtQueryInformationProcess`
 3. Set a hardware breakpoint at `NtDrawText+0x8`, when the execution reaches this address, SSN of `NtDrawText` is saved in RAX, but syscall is not called yet.
-4. Retrieve the SSN of `NtQueryInformationProcess`. Inside the exception handler, update RAX with NtQueryInformationProcess' SSN. I.e., the original SSN was replaced.
-5. Since we called `NtDrawText` but with `NtQueryInformationProcess`' arguments, the call should be failed. However, since we changed the SSN, the syscall is successful. 
 
+```windbg
+0:000> u 0x00007FFBAD00EB68-8
+ntdll!NtDrawText:
+00007ffb`ad00eb60 4c8bd1          mov     r10,rcx
+00007ffb`ad00eb63 b8dd000000      mov     eax,0DDh
+00007ffb`ad00eb68 f604250803fe7f01 test    byte ptr [SharedUserData+0x308 (00000000`7ffe0308)],1
+00007ffb`ad00eb70 7503            jne     ntdll!NtDrawText+0x15 (00007ffb`ad00eb75)
+00007ffb`ad00eb72 0f05            syscall
+00007ffb`ad00eb74 c3              ret
+00007ffb`ad00eb75 cd2e            int     2Eh
+00007ffb`ad00eb77 c3              ret
+```
+4. Retrieve the SSN of `NtQueryInformationProcess`. Inside the exception handler, update RAX with NtQueryInformationProcess' SSN. I.e., the original SSN was replaced.
+```c
+...<SNIP>...
+PVOID GetFuncByHash(IN HMODULE hModule, uint32_t Hash)
+{
+	PBYTE pBase = (PBYTE)hModule;
+	PIMAGE_DOS_HEADER	pImgDosHdr = (PIMAGE_DOS_HEADER)pBase;
+	if (pImgDosHdr->e_magic != IMAGE_DOS_SIGNATURE)
+		return NULL;
+	PIMAGE_NT_HEADERS	pImgNtHdrs = (PIMAGE_NT_HEADERS)(pBase + pImgDosHdr->e_lfanew);
+	if (pImgNtHdrs->Signature != IMAGE_NT_SIGNATURE)
+		return NULL;
+
+	IMAGE_OPTIONAL_HEADER	ImgOptHdr = pImgNtHdrs->OptionalHeader;
+	PIMAGE_EXPORT_DIRECTORY pImgExportDir = (PIMAGE_EXPORT_DIRECTORY)(pBase + ImgOptHdr.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress);
+	PDWORD FunctionNameArray = (PDWORD)(pBase + pImgExportDir->AddressOfNames);
+	PDWORD FunctionAddressArray = (PDWORD)(pBase + pImgExportDir->AddressOfFunctions);
+	PWORD  FunctionOrdinalArray = (PWORD)(pBase + pImgExportDir->AddressOfNameOrdinals);
+	for (DWORD i = 0; i < pImgExportDir->NumberOfFunctions; i++) 
+	{
+		CHAR* pFunctionName = (CHAR*)(pBase + FunctionNameArray[i]);
+		PVOID pFunctionAddress = (PVOID)(pBase + FunctionAddressArray[FunctionOrdinalArray[i]]);
+		if (Hash == ROR13Hash(pFunctionName)) 
+		{
+			return pFunctionAddress;
+		}
+	}
+	return NULL;
+}
+...<SNIP>...
+```
+5. Since we called `NtDrawText` but with `NtQueryInformationProcess`' arguments, the call should be failed. However, since we changed the SSN, the syscall is successful. 
+```c
+		fnNtQueryInformationProcess pNTQIP = (fnNtQueryInformationProcess)pNTDT;
+		NTSTATUS status = pNTQIP(pi.hProcess, ProcessBasicInformation, &pbi, sizeof(PROCESS_BASIC_INFORMATION), NULL);	
+```
 
 
 ## Example
