@@ -65,8 +65,8 @@ PVOID GetFuncByHash(IN HMODULE hModule, uint32_t Hash)
 ```
 5. Since we called `NtDrawText` but with `NtQueryInformationProcess`' arguments, the call should be failed. However, since we changed the SSN, the syscall is successful. 
 ```c
-		fnNtQueryInformationProcess pNTQIP = (fnNtQueryInformationProcess)pNTDT;
-		NTSTATUS status = pNTQIP(pi.hProcess, ProcessBasicInformation, &pbi, sizeof(PROCESS_BASIC_INFORMATION), NULL);	
+  fnNtQueryInformationProcess pNTQIP = (fnNtQueryInformationProcess)pNTDT;
+  NTSTATUS status = pNTQIP(pi.hProcess, ProcessBasicInformation, &pbi, sizeof(PROCESS_BASIC_INFORMATION), NULL);	
 ```
 
 
