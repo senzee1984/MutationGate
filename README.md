@@ -113,6 +113,10 @@ It is possible to detect MutationGate technique.
 
 <https://gist.github.com/CCob/fe3b63d80890fafeca982f76c8a3efdf>
 
+<https://malwaretech.com/2023/12/silly-edr-bypasses-and-where-to-find-them.html>
+
+Maldev Academy
+
 ## Other Approaches Utilized Hardware Breakpoint
 <https://github.com/Dec0ne/HWSyscalls>
 
