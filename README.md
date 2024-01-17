@@ -15,7 +15,7 @@ Assume NTAPI `NtDrawText` is not hooked, while NTAPI `NtQueryInformationProcess`
 1. Get the address of `NtDrawText`. It can be achieved by utilizing `GetModuleHandle` and `GetProcAddress` combination, or a custom implementation of them via PEB walking.
 ```c
   pNTDT = GetFuncByHash(ntdll, 0xA1920265);	//NtDrawText hash
-	pNTDTOffset_8 = (PVOID)((BYTE*)pNTDT + 0x8);	//Offset 0x8 from NtDrawText
+  pNTDTOffset_8 = (PVOID)((BYTE*)pNTDT + 0x8);	//Offset 0x8 from NtDrawText
 ```
 2. Prepare arguments for `NtQueryInformationProcess`
 3. Set a hardware breakpoint at `NtDrawText+0x8`, when the execution reaches this address, SSN of `NtDrawText` is saved in RAX, but syscall is not called yet.
