@@ -5,6 +5,7 @@ It works by calling an unhooked NTAPI and replacing the unhooked NTAPI's SSN wit
 
 The provided project is only a `POC`, not a comprehensive implementation. For instance, you could use this approach to set hardware breakpoints for a set of functions. 
 
+The technical article can be read at <https://winslow1984.com/books/malware/page/mutationgate>.
 
 ## Description
 EDR tends to set inline hooks for various NTAPI, especially those are usually leveraged in malware, such as `NtAllocVirtualMemory`, `NtOpenProcess`, etc. While other NTAPI that are not usually leveraged in malware tend not to have inline hook, such as `NtDrawText`. It is very unlikely that an EDR set inline hook for all NTAPI.   
