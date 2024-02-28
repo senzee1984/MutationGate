@@ -5,7 +5,6 @@ It works by calling an unhooked NTAPI and replacing the unhooked NTAPI's SSN wit
 
 The provided project is only a `POC`, not a comprehensive implementation. For instance, you could use this approach to set hardware breakpoints for a set of functions. 
 
-The function can also be WIN32API. For instance, we can set the 1st hbp at `DrawText` to redirect the execution to `NtDrawText`, and the 2nd hbp replaces the SSN saved in RAX. In this way, module `kernel32.dll` is not skipped, and the call stack looks more legitimate. 
 
 ## Description
 EDR tends to set inline hooks for various NTAPI, especially those are usually leveraged in malware, such as `NtAllocVirtualMemory`, `NtOpenProcess`, etc. While other NTAPI that are not usually leveraged in malware tend not to have inline hook, such as `NtDrawText`. It is very unlikely that an EDR set inline hook for all NTAPI.   
@@ -75,19 +74,6 @@ uint32_t GetSSNByHash(PVOID pe, uint32_t Hash)
 ```
 
 
-## Update
-
-![example](screenshot/update.jpg)
-
-I provided an updated poc `MutationGate_Update.cpp`. In this POC, I set 2 hbp respectively at `DrawText` and `NtDrawText+0x8`.
-
-When the execution reaches DrawText, update the RIP to `NtDrawText+0`
-
-When the execution reaches NtDrawText+8, update the RAX to NtQueryInformationProcess' SSN.
-
-**Pros: Avoid the direct call to NTAPI**
-
-**Cons: From the perspective of EDR, it is DrawText initiates the syscall, while NTAPI is skipped.**
 
 
 ## Example
@@ -123,8 +109,7 @@ And, it is very simple, no need to modify other registers, etc.
 It is possible to detect MutationGate technique.
 
 1. The `AddVectoredExceptionHandler` call could look suspicious in a normal program.
-2. In the POC, NTAPI is called directly, which could be weird in a normal program. However, it can be resolved by adding 1 more hardware breakpoint at `DrawText`, directing the execution to `NtDrawText` and triggering the 2nd hardware breakpoint that replaces SSN.
-3. Call stack in kernel space could reveal clues.
+2. Call stack looks suspicious, considering functions in ntdll.dll and ntoskrnl.exe are different.
 
 ## Credits and References
 <https://cyberwarfare.live/bypassing-av-edr-hooks-via-vectored-syscall-poc/>
