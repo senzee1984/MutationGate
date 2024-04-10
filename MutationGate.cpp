@@ -124,26 +124,7 @@ unsigned long long setBits(unsigned long long dw, int lowBit, int bits, unsigned
 	return dw;
 }
 
-void clearBreakpoint(CONTEXT& ctx, int index) 
-{
-	switch (index) {
-	case 0:
-		ctx.Dr0 = 0;
-		break;
-	case 1:
-		ctx.Dr1 = 0;
-		break;
-	case 2:
-		ctx.Dr2 = 0;
-		break;
-	case 3:
-		ctx.Dr3 = 0;
-		break;
-	}
-	ctx.Dr7 = setBits(ctx.Dr7, (index * 2), 1, 0);
-	ctx.Dr6 = 0;
-	ctx.EFlags = 0;
-}
+
 
 void enableBreakpoint(CONTEXT& ctx, PVOID address, int index) {
 	switch (index) {
